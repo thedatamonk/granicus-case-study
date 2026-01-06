@@ -6,6 +6,8 @@ import json
 from datetime import datetime, timezone
 import uuid
 from docparser.settings import get_settings
+from docparser.clients.embedding_client import get_embedder_client
+from docparser.clients.weaviate_client import get_weaviate_client
 from pathlib import Path
 
 settings = get_settings()
@@ -20,6 +22,10 @@ async def process_files_task(job_id: str, files_data: List[dict]):
     """Background task to process files."""
     jobs[job_id]["status"] = "processing"
     results = []
+
+    # Get embedder and weaviate client
+    embedder_client = get_embedder_client()
+    weaviate_client = get_weaviate_client()
     
     for file_data in files_data:
         filename = file_data["filename"]
@@ -27,6 +33,7 @@ async def process_files_task(job_id: str, files_data: List[dict]):
         
         try:
             # Extract text
+            logger.info(f"Extracting text from {filename}...")
             extraction = extract_text(content, filename)
             
             if not extraction["success"]:
@@ -34,33 +41,75 @@ async def process_files_task(job_id: str, files_data: List[dict]):
                     "filename": filename,
                     "status": "failed",
                     "error": extraction["error"],
-                    "chunks_created": 0
                 })
                 continue
             
             # Create chunks
+            logger.info(f"Chunking text from {filename}...")
             chunks = create_chunks_from_extraction(extraction, filename)
             
             # Store chunks locally
             output_path = Path(settings.processed_docs_dir) / job_id / f"{Path(filename).stem}.json"
             output_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Storing raw data @ {output_path}...")
             
             with open(output_path, 'w') as f:
                 json.dump({
                     "filename": filename,
                     "extraction": extraction,
                     "chunks": chunks,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }, f, indent=2)
             
-            # TODO: Generate embeddings and store in RedisVL
-            # embeddings = generate_embeddings([c["text"] for c in chunks])
-            # store_in_redis(chunks, embeddings)
-            
+            # Call the embedding service to generate the embeddings for each chunks
+            logger.info(f"Generating embeddings for {filename}...")
+            chunks_texts = [chunk["text"] for chunk in chunks]
+            try:
+                embeddings = embedder_client.generate_embeddings(texts=chunks_texts)
+                logger.info(f"Generated embeddings for {len(chunks_texts)} chunks.")
+            except Exception as e:
+                logger.error(f"Embedding generation failed for {filename}: {e}")
+                results.append({
+                    "filename": filename,
+                    "status": "failed",
+                    "error": f"Embedding generation failed: {str(e)}",
+                })
+                continue
+
+            # Combine embeddings with doc meta data
+            docs_and_embeddings = []
+            for _, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+                docs_and_embeddings.append({
+                    "properties": {
+                        "chunk_text": chunk["text"],
+                        "chunk_index": chunk["metadata"]["chunk_index"],
+                        "filename": filename,
+                        "source": chunk["metadata"]["source"],
+                        "doc_type": chunk["metadata"]["type"],
+                        "job_id": job_id,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    "vector": embedding
+                })
+
+
+            # Insert embeddings into weaviate vector db
+            logger.info(f"Inserting {len(embeddings)} embeddings into Weaviate vectordb for {filename}...")
+            try:
+                weaviate_client.insert_chunks(docs_and_embeddings)
+                logger.info("Successfully stored chunks.")
+            except Exception as e:
+                logger.error(f"Weaviate insertion failed for {filename}: {e}")
+                results.append({
+                    "filename": filename,
+                    "status": "failed",
+                    "error": f"Weaviate insertion failed: {str(e)}",
+                })
+                continue
+
             results.append({
                 "filename": filename,
                 "status": "success",
-                "chunks_created": len(chunks),
                 "error": None
             })
             
@@ -69,7 +118,6 @@ async def process_files_task(job_id: str, files_data: List[dict]):
                 "filename": filename,
                 "status": "failed",
                 "error": str(e),
-                "chunks_created": 0
             })
     
     # Update job status
