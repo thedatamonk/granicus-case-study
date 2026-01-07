@@ -2,7 +2,7 @@ from typing import List
 from fastapi import UploadFile
 from pathlib import Path
 from fastapi import HTTPException
-
+import warnings
 
 MAX_TOTAL_SIZE = 100 * 1024 * 1024  # 100MB
 MAX_FILES = 20
@@ -35,10 +35,15 @@ def validate_files(files: List[UploadFile]) -> None:
 
 
 # ============ Text Extraction ============
-def extract_text_from_pdf(content: bytes, filename: str) -> dict:
+def extract_text_from_pdf(content: bytes) -> dict:
     """Extract text from PDF with metadata."""
     try:
-        import pymupdf  # PyMuPDF
+
+        # Suppress the SWIG deprecation warning
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            import pymupdf
+        # import pymupdf
         doc = pymupdf.open(stream=content, filetype="pdf")
         
         pages = []
