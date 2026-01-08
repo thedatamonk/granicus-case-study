@@ -21,12 +21,12 @@ services:
       "--host=0.0.0.0",
       "--port=8000"
     ]
-    # healthcheck:
-    #   test: [CMD, curl, -f, http://embedder:8000/health]
-    #   interval: 10s
-    #   retries: 5
-    #   start_period: 25s
-    #   timeout: 10s
+    healthcheck:
+      test: [CMD, curl, -f, http://embedder:8000/health]
+      interval: 10s
+      retries: 5
+      start_period: 25s
+      timeout: 10s
     networks:
       - ml-network
 
@@ -54,12 +54,17 @@ services:
       "--host=0.0.0.0",
       "--port=8000"
     ]
-    # healthcheck:
-    #   test: [CMD, curl, -f, http://dockparser:8000/health]
-    #   interval: 10s
-    #   retries: 5
-    #   start_period: 80s
-    #   timeout: 10s
+    depends_on:
+      vectordb:
+        condition: service_healthy
+      embedder:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -f, http://dockparser:8000/health]
+      interval: 10s
+      retries: 5
+      start_period: 80s
+      timeout: 10s
     networks:
       - ml-network
 
@@ -88,19 +93,17 @@ services:
       "--host=0.0.0.0",
       "--port=8000"
     ]
-    # depends_on:
-    #   vectordb:
-    #     condition: service_healthy
-    #   embedder:
-    #     condition: service_healthy
-    #   reranker:
-    #     condition: service_healthy
-    # healthcheck:
-    #   test: [CMD, curl, -f, http://chatbot:8000/health]
-    #   interval: 10s
-    #   retries: 5
-    #   start_period: 5s
-    #   timeout: 10s
+    depends_on:
+      vectordb:
+        condition: service_healthy
+      embedder:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -f, http://chatbot:8000/health]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+      timeout: 10s
     networks:
       - ml-network
 
