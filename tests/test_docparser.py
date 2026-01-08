@@ -1,7 +1,7 @@
 import pytest
 from fastapi import UploadFile, HTTPException
 from io import BytesIO
-from src.apis.docparser.src.docparser.helpers import (
+from docparser.helpers import (
     validate_files,
     extract_text_from_pdf,
     create_chunks_from_extraction,
