@@ -1,5 +1,6 @@
+from typing import List, Union
+
 from pydantic import BaseModel
-from typing import Union, List
 
 
 class EmbeddingRequest(BaseModel):
@@ -8,3 +9,7 @@ class EmbeddingRequest(BaseModel):
 
 class EmbeddingResponse(BaseModel):
     embedding: Union[List[float], List[List[float]]]
+
+class HeartbeatResult(BaseModel):
+    healthy: bool
+    healthy: bool

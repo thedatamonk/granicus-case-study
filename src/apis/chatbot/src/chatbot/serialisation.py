@@ -1,5 +1,7 @@
+from typing import List
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
+
 
 class Message(BaseModel):
     """Single message in conversation history."""
@@ -34,3 +36,6 @@ class ChatResponse(BaseModel):
         default={},
         description="Latency, model info, etc."
     )
+
+class HeartbeatResult(BaseModel):
+    healthy: bool

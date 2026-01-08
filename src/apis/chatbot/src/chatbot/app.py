@@ -1,11 +1,15 @@
-from loguru import logger
+import traceback
+from contextlib import asynccontextmanager
+
+from chatbot.clients.weaviate_client import get_weaviate_client
+from chatbot.routes.v1 import router as v1_router
+from chatbot.serialisation import HeartbeatResult
 from chatbot.settings import get_settings
+from fastapi import FastAPI
+from loguru import logger
 from pydantic_settings import BaseSettings
 from starlette.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
-from chatbot.routes.v1 import router as v1_router
-from contextlib import asynccontextmanager
-from chatbot.clients.weaviate_client import get_weaviate_client
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,4 +52,17 @@ settings = get_settings()
 
 app = create_app(settings)
 
+@app.get("/health", response_model=HeartbeatResult)
+async def health_check():
+    try:
+        _ = get_weaviate_client()
+        return HeartbeatResult(healthy=True)
+    except Exception as e:
+        logger.error(
+            f"Error during health check | Error: {str(e)} | Traceback: {traceback.format_exc()}",
+        )
+        return HeartbeatResult(healthy=False)
+
+        )
+        return HeartbeatResult(healthy=False)
 

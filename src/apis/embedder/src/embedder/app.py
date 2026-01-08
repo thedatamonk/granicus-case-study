@@ -1,10 +1,15 @@
-from loguru import logger
+import traceback
+
+from embedder.handlers import create_start_app_handler
+from embedder.routes.v1 import router as v1_router
+from embedder.serialisation import HeartbeatResult
 from embedder.settings import get_settings
+from fastapi import FastAPI
+from loguru import logger
 from pydantic_settings import BaseSettings
 from starlette.middleware.cors import CORSMiddleware
-from fastapi import FastAPI
-from embedder.routes.v1 import router as v1_router
-from embedder.handlers import create_start_app_handler
+from starlette.requests import Request
+
 
 def create_app(settings: BaseSettings) -> FastAPI:
     logger.info(f"Initialising application {settings.project_name}...")
@@ -37,5 +42,20 @@ def create_app(settings: BaseSettings) -> FastAPI:
 settings = get_settings()
 
 app = create_app(settings)
+
+@app.get("/health", response_model=HeartbeatResult)
+async def health_check(request: Request):
+    try:
+        model = request.app.state.model # load the embedding model to see if we are able to encode
+        model.encode("")
+        return HeartbeatResult(healthy=True)
+    except Exception as e:
+        logger.error(
+            f"Error during health check | Error: {str(e)} | Traceback: {traceback.format_exc()}",
+        )
+        return HeartbeatResult(healthy=False)
+
+
+        return HeartbeatResult(healthy=False)
 
 
