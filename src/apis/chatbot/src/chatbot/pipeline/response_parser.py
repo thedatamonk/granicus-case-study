@@ -1,5 +1,3 @@
-# chat_service/pipeline/response_parser.py
-
 from typing import List, Dict, Any, Set
 import re
 from loguru import logger
