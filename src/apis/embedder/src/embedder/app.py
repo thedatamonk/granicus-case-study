@@ -54,8 +54,3 @@ async def health_check(request: Request):
             f"Error during health check | Error: {str(e)} | Traceback: {traceback.format_exc()}",
         )
         return HeartbeatResult(healthy=False)
-
-
-        return HeartbeatResult(healthy=False)
-
-

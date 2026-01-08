@@ -63,6 +63,3 @@ async def health_check():
         )
         return HeartbeatResult(healthy=False)
 
-        )
-        return HeartbeatResult(healthy=False)
-
