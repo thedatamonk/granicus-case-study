@@ -1,0 +1,138 @@
+services:
+
+  embedder:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.embedder
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./src/apis/embedder:/root/src/apis/embedder
+    command: [
+      "uv",
+      "--directory=src/apis/embedder/src/embedder",
+      "run",
+      "--package=embedder",
+      "fastapi",
+      "dev",
+      "app.py",
+      "--host=0.0.0.0",
+      "--port=8000"
+    ]
+    # healthcheck:
+    #   test: [CMD, curl, -f, http://embedder:8000/health]
+    #   interval: 10s
+    #   retries: 5
+    #   start_period: 25s
+    #   timeout: 10s
+    networks:
+      - ml-network
+
+  docparser:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.docparser
+    ports:
+      - "8002:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - EMBEDDER_SERVICE_URL=http://embedder:8000
+      - WEAVIATE_URL=http://vectordb:8080
+      - WEAVIATE_COLLECTION=govdocs_v1
+    volumes:
+      - ./src/apis/docparser:/root/src/apis/docparser
+    command: [
+      "uv",
+      "--directory=src/apis/docparser/src/docparser",
+      "run",
+      "--package=docparser",
+      "fastapi",
+      "dev",
+      "app.py",
+      "--host=0.0.0.0",
+      "--port=8000"
+    ]
+    # healthcheck:
+    #   test: [CMD, curl, -f, http://dockparser:8000/health]
+    #   interval: 10s
+    #   retries: 5
+    #   start_period: 80s
+    #   timeout: 10s
+    networks:
+      - ml-network
+
+  chatbot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.chatbot
+    ports:
+      - "8003:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - EMBEDDER_SERVICE_URL=http://embedder:8000
+      - WEAVIATE_URL=http://vectordb:8080
+      - WEAVIATE_COLLECTION=govdocs_v1
+      - OPENAI_API_KEY=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
+    volumes:
+      - ./src/apis/chatbot:/root/src/apis/chatbot
+    command: [
+      "uv",
+      "--directory=src/apis/chatbot/src/chatbot",
+      "run",
+      "--package=chatbot",
+      "fastapi",
+      "dev",
+      "app.py",
+      "--host=0.0.0.0",
+      "--port=8000"
+    ]
+    # depends_on:
+    #   vectordb:
+    #     condition: service_healthy
+    #   embedder:
+    #     condition: service_healthy
+    #   reranker:
+    #     condition: service_healthy
+    # healthcheck:
+    #   test: [CMD, curl, -f, http://chatbot:8000/health]
+    #   interval: 10s
+    #   retries: 5
+    #   start_period: 5s
+    #   timeout: 10s
+    networks:
+      - ml-network
+
+  vectordb:
+    command: [
+      "--host",
+      "0.0.0.0",
+      "--port",
+      "8080",
+      "--scheme",
+      "http"
+    ]
+    image: cr.weaviate.io/semitechnologies/weaviate:1.30.0
+    ports:
+    - "8080:8080"
+    - "50051:50051"
+    volumes:
+    - weaviate_data:/var/lib/weaviate
+    restart: on-failure:0
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      ENABLE_MODULES: ''
+      CLUSTER_HOSTNAME: 'node1'
+    networks:
+      - ml-network
+
+
+volumes:
+  weaviate_data:
+
+networks:
+  ml-network:
