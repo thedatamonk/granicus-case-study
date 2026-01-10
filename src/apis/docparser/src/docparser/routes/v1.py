@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, BackgroundTasks, HTTPException
 from loguru import logger
 from typing import List
-from docparser.helpers import validate_files, extract_text, create_chunks_from_extraction
+from docparser.helpers import validate_files, extract_text, create_chunks, get_doc_id
 import json
 from datetime import datetime, timezone
 import uuid
@@ -30,6 +30,8 @@ async def process_files_task(job_id: str, files_data: List[dict]):
     for file_data in files_data:
         filename = file_data["filename"]
         content = file_data["content"]
+        doctype = Path(filename).suffix.lower().strip(".")
+        docid = get_doc_id(file_data['filename'], file_data['content'], doctype)
         
         try:
             # Extract text
@@ -46,7 +48,7 @@ async def process_files_task(job_id: str, files_data: List[dict]):
             
             # Create chunks
             logger.info(f"Chunking text from {filename}...")
-            chunks = create_chunks_from_extraction(extraction, filename)
+            chunks = create_chunks(extraction, filename)
             
             # Store chunks locally
             output_path = Path(settings.processed_docs_dir) / job_id / f"{Path(filename).stem}.json"
@@ -63,7 +65,7 @@ async def process_files_task(job_id: str, files_data: List[dict]):
             
             # Call the embedding service to generate the embeddings for each chunks
             logger.info(f"Generating embeddings for {filename}...")
-            chunks_texts = [chunk["text"] for chunk in chunks]
+            chunks_texts = [chunk["content"] for chunk in chunks]
             try:
                 embeddings = embedder_client.generate_embeddings(texts=chunks_texts)
                 logger.info(f"Generated embeddings for {len(chunks_texts)} chunks.")
@@ -81,13 +83,12 @@ async def process_files_task(job_id: str, files_data: List[dict]):
             for _, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 docs_and_embeddings.append({
                     "properties": {
-                        "chunk_text": chunk["text"],
-                        "chunk_index": chunk["metadata"]["chunk_index"],
-                        "filename": filename,
-                        "source": chunk["metadata"]["source"],
-                        "doc_type": chunk["metadata"]["type"],
+                        "chunk_text": chunk["content"],
+                        "metadata": json.dumps(chunk["metadata"]),
+                        "source": docid,
+                        "doc_type": doctype,
                         "job_id": job_id,
-                        "created_at": datetime.now(timezone.utc).isoformat()
+                        "created_at": datetime.now(timezone.utc).isoformat(),
                     },
                     "vector": embedding
                 })
