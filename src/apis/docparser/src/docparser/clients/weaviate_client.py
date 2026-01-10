@@ -29,8 +29,7 @@ class WeaviateClient:
                 vector_config=Configure.Vectors.self_provided(), # we compute our own vectors using embedder service
                 properties=[
                     Property(name="chunk_text", data_type=DataType.TEXT),
-                    Property(name="chunk_index", data_type=DataType.INT),
-                    Property(name="filename", data_type=DataType.TEXT),
+                    Property(name="metadata", data_type=DataType.TEXT),
                     Property(name="source", data_type=DataType.TEXT),
                     Property(name="doc_type", data_type=DataType.TEXT),
                     Property(name="job_id", data_type=DataType.TEXT),
