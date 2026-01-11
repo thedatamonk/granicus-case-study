@@ -1,8 +1,9 @@
+import json
+from typing import Any, Dict, List
+
 import weaviate
 from chatbot.settings import get_settings
 from loguru import logger
-from typing import List, Dict, Any
-import json
 
 settings = get_settings()
 
@@ -20,26 +21,25 @@ class WeaviateRetrieverClient:
 
             response = collection.query.near_vector(
                 near_vector=query_vector,
-                limit=limit * 2,    # We will retrieve double the requested limit because we will be applying filter on distance_threshold
+                limit=limit,
                 return_metadata=["distance"]
             )
 
             # Filter by distance threshold
             results = []
             for obj in response.objects:
-                if obj.metadata.distance <= distance_threshold:
-                    results.append({
-                        "chunk_text": obj.properties.get("chunk_text"),
-                        "source_id": obj.properties.get("source"),
-                        "doc_type": obj.properties.get("doc_type"),
-                        "metadata": json.loads(obj.properties.get("metadata", {})),
-                        "distance": obj.metadata.distance
-                    })
+                # if obj.metadata.distance <= distance_threshold:
+                results.append({
+                    "chunk_text": obj.properties.get("chunk_text"),
+                    "source_id": obj.properties.get("source"),
+                    "doc_type": obj.properties.get("doc_type"),
+                    "metadata": json.loads(obj.properties.get("metadata", {})),
+                    "distance": obj.metadata.distance
+                })
 
             # return top-{limit} after filtering
-            results = results[:limit]
-
-            logger.info(f"Retrieved {len(results)} chunks (threshold: {distance_threshold})")
+            # logger.info(f"Retrieved {len(results)} chunks (threshold: {distance_threshold})")
+            logger.info(f"Retrieved {len(results)} chunks from vectordb.")
             return results
             
         except Exception as e:

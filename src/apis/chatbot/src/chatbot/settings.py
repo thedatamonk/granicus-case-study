@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.1
     llm_timeout: int = 30
 
+    # Reanker config
+    reranker_model_name: str = "jinaai/jina-reranker-v3"
+    reranked_articles_max_count: int = 2    # max number of articles to retrieve after reranking
+
     # Retrieval module configuration
     max_sources: int = 5
     similarity_threshold: float = 0.7

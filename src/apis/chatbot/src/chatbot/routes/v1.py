@@ -6,6 +6,7 @@ from chatbot.settings import get_settings
 from chatbot.pipeline.retriever import get_retriever
 from chatbot.pipeline.prompt_builder import build_prompt
 from chatbot.clients.llm_client import get_llm_client
+from chatbot.clients.reranker_client import get_reranker_client
 from chatbot.pipeline.response_parser import parse_and_validate
 
 settings = get_settings()
@@ -50,6 +51,16 @@ async def chat(request: ChatRequest) -> ChatResponse:
                 }
             )
         
+        # Rerank results
+        reranker_start_time = time.time()
+        reranker_client = get_reranker_client()
+        reranked_sources = reranker_client.rerank(query=request.query, docs=sources)
+        reranker_time = int((time.time() - reranker_start_time))
+        logger.debug(f"Reranker finished in {reranker_time}secs")
+
+        if reranked_sources:
+            sources = reranked_sources
+        
         logger.info("Building prompt...")
         prompt_start = time.time()
         
@@ -73,6 +84,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         
         timing = {
             "retrieval_secs": retrieval_time,
+            "rerank_secs": reranker_time,
             "llm_generation_secs": llm_time,
             "total_secs": int((time.time() - start_time))
         }

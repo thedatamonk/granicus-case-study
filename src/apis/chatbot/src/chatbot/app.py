@@ -2,6 +2,7 @@ import traceback
 from contextlib import asynccontextmanager
 
 from chatbot.clients.weaviate_client import get_weaviate_client
+from chatbot.clients.reranker_client import get_reranker_client
 from chatbot.routes.v1 import router as v1_router
 from chatbot.serialisation import HeartbeatResult
 from chatbot.settings import get_settings
@@ -16,6 +17,10 @@ async def lifespan(app: FastAPI):
     logger.info("Initialising weaviate client...")
     get_weaviate_client()
     logger.info("Weaviate client initialized.")
+
+    logger.info("Initialising reranker client...")
+    get_reranker_client()
+    logger.info("Reranker client initialized.")
 
     yield
 
