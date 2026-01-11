@@ -9,5 +9,7 @@ dependencies = [
     "loguru>=0.7.3",
     "openai>=2.14.0",
     "pydantic-settings>=2.12.0",
+    "torch>=2.9.1",
+    "transformers>=4.57.3",
     "weaviate-client>=4.19.2",
 ]
