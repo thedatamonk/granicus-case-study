@@ -36,11 +36,10 @@ services:
       dockerfile: docker/Dockerfile.docparser
     ports:
       - "8002:8000"
+    env_file:
+      - src/apis/docparser/src/docparser/.env
     environment:
       - PYTHONUNBUFFERED=1
-      - EMBEDDER_SERVICE_URL=http://embedder:8000
-      - WEAVIATE_URL=http://vectordb:8080
-      - WEAVIATE_COLLECTION=govdocs_v1
     volumes:
       - ./src/apis/docparser:/root/src/apis/docparser
     command: [
@@ -74,12 +73,10 @@ services:
       dockerfile: docker/Dockerfile.chatbot
     ports:
       - "8003:8000"
+    env_file:
+      - src/apis/chatbot/src/chatbot/.env
     environment:
       - PYTHONUNBUFFERED=1
-      - EMBEDDER_SERVICE_URL=http://embedder:8000
-      - WEAVIATE_URL=http://vectordb:8080
-      - WEAVIATE_COLLECTION=govdocs_v1
-      - OPENAI_API_KEY=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
     volumes:
       - ./src/apis/chatbot:/root/src/apis/chatbot
     command: [
