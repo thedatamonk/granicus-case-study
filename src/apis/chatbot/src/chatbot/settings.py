@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     max_sources: int = 5
     similarity_threshold: float = 0.7
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file="/Users/rohil/rohil-workspace/career/interviews/granicus/src/apis/chatbot/src/chatbot/.env", env_file_encoding="utf-8")
     
 
 @lru_cache

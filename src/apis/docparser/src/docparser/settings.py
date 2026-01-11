@@ -8,12 +8,23 @@ class Settings(BaseSettings):
     api_prefix: str = ""
     allowed_hosts: list[str] = ["*"]
     processed_docs_dir: str = ".processed_data"
+
+    # Embedder service configuration
     embedder_service_url: str = "http://localhost:8001"
     embedder_timeout: int = 300
-    weaviate_url: str = "http://localhost:8080"
-    weaviate_collection: str = "govdocs2"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    # Vector database configuration
+    weaviate_url: str = "http://localhost:8080"
+    weaviate_collection: str = "govdocsv2"
+    
+    # LLM configuration
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4o"
+    llm_api_key: str = ""
+    llm_temperature: float = 0.0
+    llm_timeout: int = 30
+
+    model_config = SettingsConfigDict(env_file="/Users/rohil/rohil-workspace/career/interviews/granicus/src/apis/docparser/src/docparser/.env", env_file_encoding="utf-8")
 
 
     
