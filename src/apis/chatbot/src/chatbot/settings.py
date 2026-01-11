@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 class Settings(BaseSettings):
     project_name: str = "chatbot"
@@ -31,7 +32,7 @@ class Settings(BaseSettings):
     max_sources: int = 5
     similarity_threshold: float = 0.7
 
-    model_config = SettingsConfigDict(env_file="/Users/rohil/rohil-workspace/career/interviews/granicus/src/apis/chatbot/src/chatbot/.env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=Path(__file__).parent / ".env", env_file_encoding="utf-8")
     
 
 @lru_cache

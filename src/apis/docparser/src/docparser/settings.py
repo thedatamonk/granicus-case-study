@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
 
 class Settings(BaseSettings):
     project_name: str = "docparser"
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
     llm_temperature: float = 0.0
     llm_timeout: int = 30
 
-    model_config = SettingsConfigDict(env_file="/Users/rohil/rohil-workspace/career/interviews/granicus/src/apis/docparser/src/docparser/.env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=Path(__file__).parent / ".env", env_file_encoding="utf-8")
 
 
     
