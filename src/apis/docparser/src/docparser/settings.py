@@ -16,19 +16,16 @@ class Settings(BaseSettings):
 
     # Vector database configuration
     weaviate_url: str = "http://localhost:8080"
-    weaviate_collection: str = "govdocsv2"
+    weaviate_collection: str = "default_wv_collection"
     
     # LLM configuration
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o"
     llm_api_key: str = ""
-    llm_temperature: float = 0.0
+    llm_temperature: float = 0.0        # temperature set to 0 because we want deterministic conversion of csv data to JSON string
     llm_timeout: int = 30
 
     model_config = SettingsConfigDict(env_file=Path(__file__).parent / ".env", env_file_encoding="utf-8")
-
-
-    
 
 @lru_cache
 def get_settings() -> BaseSettings:
