@@ -1,44 +1,28 @@
-from typing import List, Dict, Any, Set
-import re
+from typing import List, Dict, Any
 from loguru import logger
 from chatbot.serialisation import Source, ChatResponse
 
-def extract_cited_sources(answer: str) -> Set[int]:
-    """Extract source numbers from inline citations in answer."""
-    # Match patterns like [Source 1], [Source 2], etc.
-    pattern = r'\[Source (\d+)\]'
-    matches = re.findall(pattern, answer)
-    return set(int(n) for n in matches)
-
 def validate_citations(
-    sources_used_claimed: List[int],
-    sources_cited_in_text: Set[int],
+    sources_cited: List[str],
     available_sources: List[Dict[str, Any]]
-) -> tuple[List[int], List[str]]:
+) -> tuple[set[str], List[str]]:
     """Validate that claimed citations match actual citations and available sources."""
+
+    # Deduplicate cited sources
+    sources_cited_unique = set(sources_cited)
+    if len(sources_cited_unique) != len(sources_cited):
+        logger.warning(f"LLM citing same source more than once.\n{sources_cited}")
+    
     warnings = []
-    available_ids = {s["source_id"] for s in available_sources}
     
+    available_source_ids = {s['source_id'] for s in available_sources}
     # Check for invalid source IDs
-    invalid_claimed = [sid for sid in sources_used_claimed if sid not in available_ids]
-    if invalid_claimed:
-        warnings.append(f"LLM claimed non-existent sources: {invalid_claimed}")
-    
-    invalid_cited = [sid for sid in sources_cited_in_text if sid not in available_ids]
-    if invalid_cited:
-        warnings.append(f"LLM cited non-existent sources in text: {invalid_cited}")
+    non_existent_sources = [sid for sid in sources_cited if sid not in available_source_ids]
+    if non_existent_sources:
+        warnings.append(f"LLM claimed non-existent sources: {non_existent_sources}")
     
     # Check for mismatch between claimed and actual citations
-    claimed_set = set(sources_used_claimed) & available_ids
-    cited_set = sources_cited_in_text & available_ids
-    
-    if claimed_set != cited_set:
-        warnings.append(
-            f"Mismatch: claimed {claimed_set}, actually cited {cited_set}"
-        )
-    
-    # Use union of both as valid sources
-    valid_sources = list(claimed_set | cited_set)
+    valid_sources = set(sources_cited) & available_source_ids
     
     return valid_sources, warnings
 
@@ -54,32 +38,29 @@ def parse_and_validate(
     """
     # Extract response fields
     answer = llm_response.get("answer", "")
-    sources_used_claimed = llm_response.get("sources_used", [])
-    confidence = llm_response.get("confidence", "medium").lower()
-    
-    # Validate confidence value
-    if confidence not in ["high", "medium", "low"]:
-        logger.warning(f"Invalid confidence '{confidence}', defaulting to 'medium'")
-        confidence = "medium"
-    
-    # Extract citations from answer text
-    sources_cited_in_text = extract_cited_sources(answer)
+    sources_cited = llm_response.get("sources_used", None)
+    confidence = llm_response.get("confidence", None)
+    if confidence:
+        # Validate confidence value
+        if confidence.lower() not in ["high", "medium", "low"]:
+            logger.warning(f"Invalid confidence '{confidence}', defaulting to 'medium'")
+            confidence = "medium"
     
     # Validate citations
-    valid_source_ids, warnings = validate_citations(
-        sources_used_claimed,
-        sources_cited_in_text,
-        sources
-    )
+    valid_source_ids = []
+    warnings = []
+    if sources_cited:
+        logger.info("Validating citations...")
+        valid_source_ids, warnings = validate_citations(sources_cited, sources)
     
-    # Log warnings
-    for warning in warnings:
-        logger.warning(f"Citation validation: {warning}")
-    
-    # Mark which sources were actually cited
-    for source in sources:
-        source["cited"] = source["source_id"] in valid_source_ids
-    
+        # Log warnings
+        for warning in warnings:
+            logger.warning(f"Citation validation: {warning}")
+        
+        # Mark valid sources as cited
+        for source in sources:
+            source["cited"] = source["source_id"] in valid_source_ids
+        
     # Convert to Source models
     source_models = [Source(**s) for s in sources]
     
