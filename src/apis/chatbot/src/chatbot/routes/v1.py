@@ -24,13 +24,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
         sources = retriever.retrieve(
             query=request.query,
         )
-        retrieval_time = int((time.time() - retrieval_start) * 1000)
-        logger.debug(f"Retriever finished in {retrieval_time}ms")
+        retrieval_time = int((time.time() - retrieval_start))
+        logger.debug(f"Retriever finished in {retrieval_time}secs")
 
         # Handle no results case
         if not sources:
             logger.warning("No relevant sources found")
-            total_time = int((time.time() - start_time) * 1000)
+            total_time = int((time.time() - start_time))
             
             return ChatResponse(
                 query=request.query,
@@ -42,10 +42,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     "sources_retrieved": 0,
                     "sources_cited": 0,
                     "citation_warnings": [],
-                    "latency_ms": {
-                        "retrieval_ms": retrieval_time,
-                        "llm_generation_ms": 0,
-                        "total_ms": total_time
+                    "latency_secs": {
+                        "retrieval_secs": retrieval_time,
+                        "llm_generation_secs": 0,
+                        "total_secs": total_time
                     }
                 }
             )
@@ -59,22 +59,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
             conversation_history=request.conversation_history
         )
 
-        prompt_time = int((time.time() - prompt_start) * 1000)
-        logger.debug(f"Prompt built in {prompt_time}ms ({len(prompt)} chars)")
+        prompt_time = int((time.time() - prompt_start))
+        logger.debug(f"Prompt built in {prompt_time}secs ({len(prompt)} chars)")
 
         logger.info("Generating response...")
         llm_start = time.time()
         llm_client = get_llm_client()
         llm_response = llm_client.generate(prompt)
-        llm_time = int((time.time() - llm_start) * 1000)
-        logger.info(f"LLM responded in {llm_time}ms")
+        llm_time = int((time.time() - llm_start))
+        logger.info(f"LLM responded in {llm_time}secs")
 
         logger.info("Validating LLM response...")
         
         timing = {
-            "retrieval_ms": retrieval_time,
-            "llm_generation_ms": llm_time,
-            "total_ms": int((time.time() - start_time) * 1000)
+            "retrieval_secs": retrieval_time,
+            "llm_generation_secs": llm_time,
+            "total_secs": int((time.time() - start_time))
         }
         
         parse_start = time.time()
@@ -85,11 +85,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
             query=request.query,
             model_name=settings.llm_model
         )
-        parse_time = int((time.time() - parse_start) * 1000)
-        logger.debug(f"Response parsed in {parse_time}ms")
+        parse_time = int((time.time() - parse_start))
+        logger.debug(f"Response parsed in {parse_time}secs")
 
         logger.info(
-            f"Query completed: {timing['total_ms']}ms | "
+            f"Query completed: {timing['total_secs']}secs | "
             f"Sources: {len(sources)} | "
             f"Cited: {response.metadata['sources_cited']} | "
             f"Confidence: {response.confidence}"
