@@ -2,6 +2,7 @@ import weaviate
 from chatbot.settings import get_settings
 from loguru import logger
 from typing import List, Dict, Any
+import json
 
 settings = get_settings()
 
@@ -29,10 +30,9 @@ class WeaviateRetrieverClient:
                 if obj.metadata.distance <= distance_threshold:
                     results.append({
                         "chunk_text": obj.properties.get("chunk_text"),
-                        "filename": obj.properties.get("filename"),
-                        "chunk_index": obj.properties.get("chunk_index"),
-                        "source": obj.properties.get("source"),
+                        "source_id": obj.properties.get("source"),
                         "doc_type": obj.properties.get("doc_type"),
+                        "metadata": json.loads(obj.properties.get("metadata", {})),
                         "distance": obj.metadata.distance
                     })
 
