@@ -12,3 +12,6 @@ wheels/
 .processed_data
 
 .env
+.env.local
+
+.vscode/
