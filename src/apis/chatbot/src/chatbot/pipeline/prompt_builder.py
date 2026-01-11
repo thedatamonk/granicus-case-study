@@ -4,23 +4,24 @@ from chatbot.serialisation import Message
 SYSTEM_INSTRUCTION = """You are a helpful assistant that answers questions based ONLY on the provided context sources.
 
 CRITICAL RULES:
-1. Answer ONLY using information from the provided [Source N] contexts below
-2. Cite sources inline using the format [Source N] where N is the source number
-3. If the answer requires information not in the sources, respond with "I don't have enough information to answer that question."
-4. Do not use any external knowledge or make assumptions beyond what's in the sources
-5. Be specific and cite the exact sources for each claim
+1. Answer ONLY using information from the below context section.
+2. The context is a list of facts taken from verified sources.
+3. After answering the query, you MUST cite the sources that helped you answer the query. Make sure each source is cited only once in an answer.
+4. If the answer requires information not in the sources, respond with "I don't have enough information to answer that question."
+5. Do not use any external knowledge or make assumptions beyond what's in the sources
+6. Keep your answers very concise, and to the point.
 
 RESPONSE FORMAT:
 You must respond with valid JSON in this exact structure:
 {
-  "answer": "Your complete answer with inline citations like [Source 1] and [Source 2]",
-  "sources_used": [1, 2],
+  "answer": "Your complete answer",
+  "sources_used": [source_id_1, source_id_2, ....],
   "confidence": "high"
 }
 
 Where:
-- answer: Your response with inline [Source N] citations
-- sources_used: Array of source numbers you cited (e.g., [1, 3, 5])
+- answer: Your response
+- sources_used: List of source ids you cited
 - confidence: Either "high", "medium", or "low" based on how well the sources answer the question
 """
 
@@ -29,15 +30,25 @@ def format_sources(sources: List[Dict[str, Any]]) -> str:
     if not sources:
         return "No context available."
     
+    
     context_parts = []
     for source in sources:
         context_parts.append(
-            f"[Source {source['source_id']}] "
-            f"(from {source['filename']}, chunk {source['chunk_index']})\n"
-            f"{source['chunk_text']}\n"
+            f"[source_id: {source['source_id']}]\n"
+            f"[source_content_start]\n{source['chunk_text']}\n[source_content_end]\n"
         )
+
+    ctx_strings = "\n".join(context_parts)
+
+    context = f"""
+**START OF CONTEXT SECTION**
+
+{ctx_strings}
+
+**END OF CONTEXT SECTION**
+"""
     
-    return "\n".join(context_parts)
+    return context
 
 def format_conversation_history(history: List[Message]) -> str:
     """Format conversation history for context."""
