@@ -4,8 +4,9 @@ A scalable production-ready RAG chatbot system that can answer questions about G
 
 ## Key design decisions
 1. The requirement of this problem statement was to build a RAG chatbot with **production-ready architecture and proper scaling**. Given this requirement, I immediately decided to structure my business logic into microservices. This will help us improve, test and deploy each component independently. 
-2. I also wanted to make the building & running this project easier for any other person. Hence I used docker and docker compose.
+2. I also wanted to make the building & running of this project easier for any other person. Hence I used `docker compose`.
 3. The internal structure of each microservice may appear overkill for the current problem size. However, this was done deliberately to demonstrate how the same codebase can scale to a real production system. The separation between routing, business logic, and configuration makes it easier to add new features, swap components, and test individual pieces in isolation without refactoring the entire service.
+4. The parsing logic in docparser service (refer to `helpers.py` in `docparser` service) is very specific to the content structure of each file. For instance, I noticed that all the text and markdown files have each section separated by `===<SECTION_NAME>===`. So to improve retrieval I wrote filetype specific parsing and chunking logic.
 
 ## Note on submission timeline
 The submission took slightly longer than initially expected. This was a deliberate choice. Given the breadth of the problem, I chose to prioritize a clean, extensible, and production-oriented design over a rushed implementation.
@@ -46,10 +47,10 @@ The system consists of five main components:
 ### 4. Reranker (Runs as part of chatbot service)
 
 - Re-ranks search results using cross-encoder models for improved relevance
-- Built with: `transformers`, `fastapi`
+- Built with: `transformers`
 - Provides fine-grained relevance scoring
 
-### 5. Chatbot Service
+### 5. Chatbot Service (Port 8003)
 
 - Provides the main API endpoint for the chatbot
 - Orchestrates embedding generation, vector search, and re-ranking
@@ -62,7 +63,7 @@ The system consists of five main components:
 - **ML Models**:
   - [Sentence Transformers](https://www.sbert.net/) - Dense embedding generation
   - [Hugging Face Transformers](https://huggingface.co/transformers/) - Re-ranking models
-- **Vector Database**: [Redis Stack](https://redis.io/docs/stack/) with vector similarity search
+- **Vector Database**: [Weaviate](https://weaviate.io/)
 - **Package Management**: [uv](https://github.com/astral-sh/uv) - Fast Python package installer
 - **Containerization**: Docker & Docker Compose
 - **Testing**: pytest
@@ -112,7 +113,7 @@ git clone <repository-url>
 cd granicus-case-study
 ```
 2. Setup environment variables
-- Rename all the `.env.example` files to `.env`. *You can refer to the filepath mentioned in the `env_file` field in the docker-compose.yaml to locate the `.env` files.
+- Rename all the `.env.example` files to `.env`. *(You can refer to the filepath mentioned in the `env_file` field in the docker-compose.yaml to locate the `.env` files.)*
 - You only have to set your `LLM_API_KEY`. **Note:** For now, we only support OpenAI models, so please key in the openai API key. You have to set this up in both the `.env` files.
 
 1. Start all services with Docker Compose:
