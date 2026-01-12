@@ -26,16 +26,18 @@ class WeaviateRetrieverClient:
             )
 
             # Filter by distance threshold
+            # This will help filter out completely irrelevant chunks that are usually retrieved
+            # when the user asks out-of-domain questions
             results = []
             for obj in response.objects:
-                # if obj.metadata.distance <= distance_threshold:
-                results.append({
-                    "chunk_text": obj.properties.get("chunk_text"),
-                    "source_id": obj.properties.get("source"),
-                    "doc_type": obj.properties.get("doc_type"),
-                    "metadata": json.loads(obj.properties.get("metadata", {})),
-                    "distance": obj.metadata.distance
-                })
+                if obj.metadata.distance <= distance_threshold:
+                    results.append({
+                        "chunk_text": obj.properties.get("chunk_text"),
+                        "source_id": obj.properties.get("source"),
+                        "doc_type": obj.properties.get("doc_type"),
+                        "metadata": json.loads(obj.properties.get("metadata", {})),
+                        "distance": obj.metadata.distance
+                    })
 
             # return top-{limit} after filtering
             # logger.info(f"Retrieved {len(results)} chunks (threshold: {distance_threshold})")
