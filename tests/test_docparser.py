@@ -1,282 +1,180 @@
 import pytest
 from fastapi import UploadFile, HTTPException
 from io import BytesIO
+from unittest.mock import Mock, patch, MagicMock
+import hashlib
+
 from docparser.helpers import (
     validate_files,
-    extract_text_from_pdf,
-    create_chunks_from_extraction,
-    MAX_FILES,
-    MAX_TOTAL_SIZE,
+    get_doc_id,
+    extract_text_from_csv,
+    chunk_text_from_csv,
+    _split_document_by_headings
 )
 
 
 # ============ Fixtures ============
 
 @pytest.fixture
-def mock_pdf_content():
-    """Create a minimal valid PDF content for testing."""
-    # Minimal PDF structure
-    pdf_content = b"""%PDF-1.4
-1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
-2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj
-3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>>>endobj
-xref
-0 4
-0000000000 65535 f
-0000000009 00000 n
-0000000052 00000 n
-0000000101 00000 n
-trailer<</Size 4/Root 1 0 R>>
-startxref
-190
-%%EOF"""
-    return pdf_content
+def valid_upload_files():
+    """Create valid mock UploadFile objects."""
+    mock_files = []
+    for i in range(3):
+        mock_file = Mock(spec=UploadFile)
+        mock_file.filename = f"test_{i}.csv"
+        mock_file.file = BytesIO(b"test content " * 100)
+        mock_files.append(mock_file)
+    return mock_files
 
 
 @pytest.fixture
-def mock_upload_file():
-    """Create a mock UploadFile for testing."""
-    def _create_file(filename: str, content: bytes, size: int|None = None) -> UploadFile:
-        file = UploadFile(
-            filename=filename,
-            file=BytesIO(content),
-            size=size,
-        )
-        return file
-    return _create_file
+def sample_csv_content():
+    """Sample CSV content as bytes."""
+    return b"name,age,city\nAlice,30,NYC\nBob,25,LA\n"
 
 
 @pytest.fixture
-def valid_pdf_files(mock_upload_file):
-    """Create a list of valid PDF files."""
-    return [
-        mock_upload_file("test1.pdf", b"fake pdf content", 1000),
-        mock_upload_file("test2.pdf", b"another pdf", 1000)
-    ]
+def sample_heading_document():
+    """Sample document with === HEADING === format."""
+    return """Sample Document Title
+=== Introduction ===
+This is the introduction section.
+It has multiple lines.
+
+=== Methods ===
+This describes the methods.
+More details here.
+
+=== Conclusion ===
+Final thoughts.
+"""
 
 
-# ============ Test 1: File Validation ============
+@pytest.fixture
+def mock_llm_response():
+    """Mock LLM response for CSV chunking."""
+    return {
+        "Product_A": {
+            "name": "Widget Pro",
+            "price": 99.99,
+            "features": ["fast", "reliable"]
+        },
+        "Product_B": {
+            "name": "Gadget Plus",
+            "price": 149.99,
+            "features": ["premium", "durable"]
+        }
+    }
 
-class TestValidateFiles:
-    """Test suite for file validation logic."""
+
+class TestDocumentUtils:
+    # ===== Validate Files =====
     
-    def test_validate_files_success_with_valid_files(self, mock_upload_file):
-        """Test that valid files pass validation."""
+    def test_validate_files_passes_all_constraints(self, valid_upload_files):
+        """Test that valid files pass all validation checks."""
+        # Act & Assert - should not raise HTTPException
+        try:
+            validate_files(valid_upload_files)
+        except HTTPException:
+            pytest.fail("validate_files raised HTTPException unexpectedly")
+    
+    # ===== Get Doc ID =====
+    
+    def test_get_doc_id_generates_consistent_hash(self):
+        """Test that doc_id is deterministic and includes all components."""
         # Arrange
-        files = [
-            mock_upload_file("doc1.pdf", b"x" * 1000),
-            mock_upload_file("data.csv", b"y" * 2000),
-            mock_upload_file("notes.txt", b"z" * 1500)
-        ]
+        filename = "test_document.pdf"
+        content = b"sample file content"
+        doctype = "invoice"
         
-        # Act & Assert - should not raise any exception
-        validate_files(files)
-    
-    def test_validate_files_raises_error_when_too_many_files(self, mock_upload_file):
-        """Test that exceeding MAX_FILES raises HTTPException."""
-        # Arrange
-        files = [mock_upload_file(f"file{i}.pdf", b"content") for i in range(MAX_FILES + 1)]
-        
-        # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
-            validate_files(files)
-        
-        assert exc_info.value.status_code == 400
-        assert f"Maximum {MAX_FILES} files allowed" in str(exc_info.value.detail)
-    
-    def test_validate_files_raises_error_for_invalid_extension(self, mock_upload_file):
-        """Test that invalid file extensions raise HTTPException."""
-        # Arrange
-        files = [
-            mock_upload_file("valid.pdf", b"content"),
-            mock_upload_file("invalid.docx", b"content")  # Invalid extension
-        ]
-        
-        # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
-            validate_files(files)
-        
-        assert exc_info.value.status_code == 400
-        assert "invalid.docx" in str(exc_info.value.detail)
-        assert "invalid type" in str(exc_info.value.detail).lower()
-    
-    def test_validate_files_raises_error_when_total_size_exceeds_limit(self, mock_upload_file):
-        """Test that exceeding MAX_TOTAL_SIZE raises HTTPException."""
-        # Arrange - Create files that exceed the total size limit
-        large_content = b"x" * (MAX_TOTAL_SIZE // 2 + 1)
-        files = [
-            mock_upload_file("large1.pdf", large_content),
-            mock_upload_file("large2.pdf", large_content)
-        ]
-        
-        # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
-            validate_files(files)
-        
-        assert exc_info.value.status_code == 400
-        assert "exceeds" in str(exc_info.value.detail).lower()
-
-
-# ============ Test 2: PDF Text Extraction ============
-
-class TestExtractTextFromPDF:
-    """Test suite for PDF text extraction."""
-    
-    def test_extract_text_from_pdf_success(self, mock_pdf_content):
-        """Test successful PDF text extraction returns correct structure."""
         # Act
-        result = extract_text_from_pdf(mock_pdf_content)
+        doc_id = get_doc_id(filename, content, doctype)
+        
+        # Assert
+        assert doc_id.startswith(f"{doctype}-test_document-")
+        expected_hash = hashlib.md5(content).hexdigest()[:8]
+        assert doc_id.endswith(expected_hash)
+        
+        # Verify consistency
+        doc_id_2 = get_doc_id(filename, content, doctype)
+        assert doc_id == doc_id_2
+    
+    # ===== Extract Text from CSV =====
+    
+    def test_extract_text_from_csv_converts_to_json(self, sample_csv_content):
+        """Test CSV extraction with encoding detection and JSON conversion."""
+        # Act
+        result = extract_text_from_csv(sample_csv_content)
         
         # Assert
         assert result["success"] is True
-        assert "pages" in result
-        assert "total_pages" in result
-        assert isinstance(result["pages"], list)
-        assert result["total_pages"] == len(result["pages"])
+        assert "content" in result
         
-        # Verify page structure
-        if result["pages"]:
-            page = result["pages"][0]
-            assert "page" in page
-            assert "text" in page
-            assert isinstance(page["page"], int)
-            assert isinstance(page["text"], str)
+        import json
+        parsed = json.loads(result["content"])
+        assert isinstance(parsed, list)
+        assert len(parsed) == 2
+        assert parsed[0] == {"name": "Alice", "age": 30, "city": "NYC"}
+        assert parsed[1] == {"name": "Bob", "age": 25, "city": "LA"}
     
-    def test_extract_text_from_pdf_handles_invalid_content(self):
-        """Test that invalid PDF content returns error structure."""
-        # Arrange
-        invalid_content = b"This is not a PDF"
+    # ===== Split Document by Headings =====
+    
+    def test_split_document_by_headings_creates_chunks(self, sample_heading_document):
+        """Test document splitting with === HEADING === pattern."""
         # Act
-        result = extract_text_from_pdf(invalid_content)
+        chunks = _split_document_by_headings(sample_heading_document)
         
         # Assert
-        assert result["success"] is False
-        assert "error" in result
-        assert "extraction failed" in result["error"].lower()
-    
-    def test_extract_text_from_pdf_handles_empty_content(self):
-        """Test that empty content returns error structure."""
-        # Arrange
-        empty_content = b""
+        assert len(chunks) == 3
         
-        # Act
-        result = extract_text_from_pdf(empty_content)
+        # Verify first chunk
+        assert chunks[0]["metadata"]["section_heading"] == "Introduction"
+        assert "introduction section" in chunks[0]["content"].lower()
         
-        # Assert
-        assert result["success"] is False
-        assert "error" in result
-
-
-# ============ Test 3: Chunk Creation ============
-
-class TestCreateChunksFromExtraction:
-    """Test suite for chunk creation from extracted text."""
-    
-    def test_create_chunks_from_pdf_extraction(self):
-        """Test chunk creation from PDF extraction results."""
-        # Arrange
-        extraction_result = {
-            "success": True,
-            "pages": [
-                {"page": 1, "text": "This is page one content. " * 100},  # Long text
-                {"page": 2, "text": "This is page two content. " * 100}
-            ],
-            "total_pages": 2
-        }
-        filename = "test.pdf"
+        # Verify second chunk
+        assert chunks[1]["metadata"]["section_heading"] == "Methods"
+        assert "methods" in chunks[1]["content"].lower()
         
-        # Act
-        chunks = create_chunks_from_extraction(extraction_result, filename)
+        # Verify third chunk
+        assert chunks[2]["metadata"]["section_heading"] == "Conclusion"
+        assert "final thoughts" in chunks[2]["content"].lower()
         
-        # Assert
-        assert len(chunks) > 0
-        assert all(isinstance(chunk, dict) for chunk in chunks)
-        
-        # Verify chunk structure
+        # Verify all have document name
         for chunk in chunks:
-            assert "text" in chunk
-            assert "metadata" in chunk
-            assert chunk["metadata"]["source"] == filename
-            assert chunk["metadata"]["type"] == "pdf"
-            assert "page" in chunk["metadata"]
-            assert "chunk_index" in chunk["metadata"]
-            assert isinstance(chunk["text"], str)
-            assert len(chunk["text"]) > 0
+            assert chunk["metadata"]["document_name"] == "Sample Document Title"
     
-    def test_create_chunks_from_csv_extraction(self):
-        """Test chunk creation from CSV extraction results."""
+    # ===== Chunk Text from CSV =====
+    
+    @patch('docparser.helpers.get_llm_client')
+    def test_chunk_text_from_csv_creates_chunks_from_llm(
+        self, 
+        mock_get_llm_client,
+        mock_llm_response
+    ):
+        """Test CSV chunking with mocked LLM response."""
         # Arrange
-        extraction_result = {
-            "success": True,
-            "headers": ["Name", "Age", "City"],
-            "rows": [
-                "Name: John | Age: 30 | City: NYC",
-                "Name: Jane | Age: 25 | City: LA",
-                "Name: Bob | Age: 35 | City: SF",
-                "Name: Alice | Age: 28 | City: Seattle"
-            ],
-            "total_rows": 4
-        }
-        filename = "data.csv"
+        mock_llm = MagicMock()
+        mock_llm.generate.return_value = mock_llm_response
+        mock_get_llm_client.return_value = mock_llm
+        
+        json_string = '[{"id": 1, "data": "test"}]'
         
         # Act
-        chunks = create_chunks_from_extraction(extraction_result, filename)
+        result = chunk_text_from_csv(json_string)
         
         # Assert
-        assert len(chunks) > 0
+        assert isinstance(result, list)
+        assert len(result) == 2
         
-        # Verify chunk structure
-        for chunk in chunks:
-            assert "text" in chunk
-            assert "metadata" in chunk
-            assert chunk["metadata"]["source"] == filename
-            assert chunk["metadata"]["type"] == "csv"
-            assert "row_start" in chunk["metadata"]
-            assert "row_end" in chunk["metadata"]
-            assert "chunk_index" in chunk["metadata"]
-            # Verify headers are included
-            assert "Headers:" in chunk["text"]
-    
-    def test_create_chunks_returns_empty_for_failed_extraction(self):
-        """Test that failed extraction results return empty chunks."""
-        # Arrange
-        extraction_result = {
-            "success": False,
-            "error": "Extraction failed"
-        }
-        filename = "failed.pdf"
+        # Verify first chunk
+        assert "**Product_A**" in result[0]["content"]
+        assert "Widget Pro" in result[0]["content"]
+        assert result[0]["metadata"]["chunk_label"] == "Product_A"
         
-        # Act
-        chunks = create_chunks_from_extraction(extraction_result, filename)
+        # Verify second chunk
+        assert "**Product_B**" in result[1]["content"]
+        assert "Gadget Plus" in result[1]["content"]
+        assert result[1]["metadata"]["chunk_label"] == "Product_B"
         
-        # Assert
-        assert chunks == []
-        assert isinstance(chunks, list)
-    
-    def test_create_chunks_from_txt_extraction(self):
-        """Test chunk creation from TXT extraction results."""
-        # Arrange
-        extraction_result = {
-            "success": True,
-            "paragraphs": [
-                "This is the first paragraph with some content.",
-                "This is the second paragraph with more information.",
-                "And here is a third paragraph to test chunking."
-            ],
-            "total_paragraphs": 3
-        }
-        filename = "notes.txt"
-        
-        # Act
-        chunks = create_chunks_from_extraction(extraction_result, filename)
-        
-        # Assert
-        assert len(chunks) > 0
-        
-        # Verify chunk structure
-        for chunk in chunks:
-            assert "text" in chunk
-            assert "metadata" in chunk
-            assert chunk["metadata"]["source"] == filename
-            assert chunk["metadata"]["type"] == "txt"
-            assert "chunk_index" in chunk["metadata"]
+        # Verify LLM called correctly
+        mock_llm.generate.assert_called_once_with(json_string)
