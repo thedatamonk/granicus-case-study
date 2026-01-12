@@ -2,7 +2,15 @@
 
 A scalable production-ready RAG chatbot system that can answer questions about Granicus products and services. The system must handle diverse document formats, provide accurate information, and maintain strict adherence to the provided knowledge base.
 
-## Overview
+## Key design decisions
+1. The requirement of this problem statement was to build a RAG chatbot with **production-ready architecture and proper scaling**. Given this requirement, I immediately decided to structure my business logic into microservices. This will help us improve, test and deploy each component independently. 
+2. I also wanted to make the building & running this project easier for any other person. Hence I used docker and docker compose.
+3. The internal structure of each microservice may appear overkill for the current problem size. However, this was done deliberately to demonstrate how the same codebase can scale to a real production system. The separation between routing, business logic, and configuration makes it easier to add new features, swap components, and test individual pieces in isolation without refactoring the entire service.
+
+## Note on submission timeline
+The submission took slightly longer than initially expected. This was a deliberate choice. Given the breadth of the problem, I chose to prioritize a clean, extensible, and production-oriented design over a rushed implementation.
+
+Instead of submitting a minimal or partially working solution, I spent additional time ensuring that the system has clear component boundaries, proper initialization flow, testability, and realistic scaling patterns. This extra time allowed me to deliver something closer to how I would actually build and ship such a system in a real production environment.
 
 ## Core components
 
@@ -15,7 +23,7 @@ A scalable production-ready RAG chatbot system that can answer questions about G
 
 ## Architecture
 
-The system consists of four main microservices:
+The system consists of five main components:
 
 ### 1. Embedder Service (Port 8001)
 
@@ -115,9 +123,9 @@ docker-compose up --build
 
 This will start:
 
-- Chatbot API at http://localhost:8003
 - Embedder API at http://localhost:8001
 - Docparser API at http://localhost:8002
+- Chatbot API at http://localhost:8003
 - Weaviate vector database at http://localhost:8080
 
 1. Verify services are running:
