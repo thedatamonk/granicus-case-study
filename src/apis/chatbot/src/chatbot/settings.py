@@ -25,7 +25,8 @@ class Settings(BaseSettings):
     llm_timeout: int = 30
 
     # Reanker config
-    reranker_model_name: str = "jinaai/jina-reranker-v3"
+    # reranker_model_name: str = "jinaai/jina-reranker-v3"
+    reranker_model_name: str = "jinaai/jina-reranker-v1-tiny-en"
     reranked_articles_max_count: int = 2    # max number of articles to retrieve after reranking
 
     # Retrieval module configuration
