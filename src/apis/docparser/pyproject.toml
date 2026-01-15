@@ -7,10 +7,12 @@ requires-python = ">=3.10"
 dependencies = [
     "chardet>=5.2.0",
     "fastapi[standard]>=0.128.0",
+    "langchain-text-splitters>=1.1.0",
     "loguru>=0.7.3",
     "openai>=2.14.0",
     "pandas>=2.3.3",
     "pydantic-settings>=2.12.0",
     "pymupdf>=1.26.7",
+    "pymupdf4llm>=0.2.9",
     "weaviate-client>=4.19.2",
 ]

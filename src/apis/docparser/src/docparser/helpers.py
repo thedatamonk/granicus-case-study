@@ -1,11 +1,11 @@
-from typing import List
-from fastapi import UploadFile
-from pathlib import Path
-from fastapi import HTTPException
-from docparser.clients.llm_client import get_llm_client
-import warnings
 import hashlib
 import re
+from pathlib import Path
+from typing import List
+
+from docparser.clients.llm_client import get_llm_client
+from fastapi import HTTPException, UploadFile
+from langchain_text_splitters import MarkdownHeaderTextSplitter
 
 MAX_TOTAL_SIZE = 100 * 1024 * 1024  # 100MB
 MAX_FILES = 20
@@ -49,27 +49,41 @@ def extract_text_from_pdf(content: bytes) -> dict:
     """Extract text from PDF with metadata."""
     try:
 
-        # Suppress the SWIG deprecation warning
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
-            import pymupdf
+        # # Suppress the SWIG deprecation warning
+        # with warnings.catch_warnings():
+        #     warnings.filterwarnings("ignore", category=DeprecationWarning)
+        #     import pymupdf
 
-        doc = pymupdf.open(stream=content, filetype="pdf")
+        # doc = pymupdf.open(stream=content, filetype="pdf")
         
-        pages = []
-        for page_num, page in enumerate(doc, 1):
-            text = page.get_text()
-            pages.append({
-                "page": page_num,
-                "text": text.strip()
-            })
+        # pages = []
+        # for page_num, page in enumerate(doc, 1):
+        #     text = page.get_text()
+        #     pages.append({
+        #         "page": page_num,
+        #         "text": text.strip()
+        #     })
         
+        # doc.close()
+        # return {
+        #     "success": True,
+        #     "content": pages,
+        # }
+        from io import BytesIO
+
+        import pymupdf
+        import pymupdf4llm
+
+        doc = pymupdf.open(stream=BytesIO(content), filetype="pdf")
+        md_content = pymupdf4llm.to_markdown(doc)
+
         doc.close()
+
         return {
             "success": True,
-            "pages": pages,
-            "total_pages": len(pages)
+            "content": md_content
         }
+
     except Exception as e:
         return {
             "success": False,
@@ -80,11 +94,12 @@ def extract_text_from_pdf(content: bytes) -> dict:
 def extract_text_from_csv(content: bytes) -> dict:
     """Extract text from CSV with structure preservation & convert them to a JSON string."""
     try:
-        import pandas as pd
-        import chardet
-        from io import BytesIO
         import json
-        
+        from io import BytesIO
+
+        import chardet
+        import pandas as pd
+
         # Detect encoding
         detected = chardet.detect(content)
         encoding = detected['encoding'] or 'utf-8'
@@ -112,7 +127,7 @@ def extract_text_from_txt(content: bytes) -> dict:
     """Extract raw text from TXT with encoding detection."""
     try:
         import chardet
-        
+
         # Detect encoding
         detected = chardet.detect(content)
         encoding = detected['encoding'] or 'utf-8'
@@ -137,8 +152,7 @@ def extract_text(content: bytes, filename: str) -> dict:
     ext = Path(filename).suffix.lower()
     
     if ext == ".pdf":
-        return {"success": False, "error": "Unsupported file type"}
-        # return extract_text_from_pdf(content)
+        return extract_text_from_pdf(content)
     elif ext == ".csv":
         return extract_text_from_csv(content)
     elif ext in [".txt", ".md"]:
@@ -152,8 +166,7 @@ def create_chunks(extraction_result: dict, filename: str) -> List[dict] | dict:
     ext = Path(filename).suffix.lower()
     
     if ext == ".pdf":
-        raise NotImplementedError
-        # return chunk_text_from_pdf(extraction_result["content"])
+        return chunk_text_from_pdf(extraction_result["content"])
     elif ext == ".csv":
         return chunk_text_from_csv(extraction_result["content"])
     elif ext == ".txt":
@@ -162,6 +175,35 @@ def create_chunks(extraction_result: dict, filename: str) -> List[dict] | dict:
         return chunk_text_from_md(extraction_result["content"])
     else:
         return {"success": False, "error": "Unsupported file type"}
+
+
+def chunk_text_from_pdf(content: str) -> List[dict] | dict:
+    try:
+        headers_to_split_on = [
+            ("##", "Section Name"),
+        ]
+
+        markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on)
+        splits = markdown_splitter.split_text(content)
+
+        # Convert each split into the chunk format
+        chunks = []
+        for split in splits:
+            # if metadata is not None or empty -> We don't treat it as a chunk
+            if split.metadata:
+                chunks.append(
+                    {
+                        "content": split.page_content,
+                        "metadata": split.metadata
+                    }
+                )
+
+        return chunks
+    except Exception as e:
+        return {
+            "success": False, "error": f"The input text from the given .PDF file is not in the format that this chunking strategy is implemented for.\nGot this error: {e}"
+        }
+    
 
 def chunk_text_from_txt(text: str) -> List[dict] | dict:
     """
@@ -389,5 +431,7 @@ def _split_document_by_headings(text: str) -> List[dict]:
                 'section_heading': current_heading,
             }
         })
+
+    return chunks
 
     return chunks
