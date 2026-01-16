@@ -119,7 +119,7 @@ cd granicus-case-study
 1. Start all services with Docker Compose:
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 This will start:
@@ -128,12 +128,6 @@ This will start:
 - Docparser API at http://localhost:8002
 - Chatbot API at http://localhost:8003
 - Weaviate vector database at http://localhost:8080
-
-1. Verify services are running:
-
-```bash
-curl http://localhost:8000/health
-```
 
 ### Interact with the services
 
@@ -146,7 +140,7 @@ I didn't get time to build a proper UI for this. So as of now the best way to in
 
 
 **Chat with the RAG chatbot**
-1. Now you can pass your query to the `/chat` endpoint in chatbot service. **Note:** *this endpoint takes some time to execute due to the reranker component. My understanding is that once we deploy this system on a GPU machine, the reranker component will execute much faster.*
+1. Now you can pass your query to the `/chat` endpoint in chatbot service.
 2. The response will be a JSON response and will contain the answer along with the source chunks that were used by the LLM to answer the query.
 
 ### API Documentation
