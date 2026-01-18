@@ -9,6 +9,7 @@ from docparser.settings import get_settings
 from docparser.clients.embedding_client import get_embedder_client
 from docparser.clients.weaviate_client import get_weaviate_client
 from pathlib import Path
+from fastapi.concurrency import run_in_threadpool
 
 settings = get_settings()
 
@@ -17,16 +18,44 @@ router = APIRouter(prefix="/v1")
 # in-memoy storage for file ingestion jobs
 jobs = {}
 
+
+def process_files_task_sync(job_id: str, files: List[UploadFile]):
+    """
+    Synchronous wrapper for blocking operations.
+    """
+    import asyncio
+
+    # Create a new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        # Run the same async function in this thread's event loop
+        loop.run_until_complete(process_files_task(job_id, files))
+    finally:
+        loop.close()
+
 # ============ Background Processing ============
-async def process_files_task(job_id: str, files_data: List[dict]):
+async def process_files_task(job_id: str, files: List[UploadFile]):
     """Background task to process files."""
     jobs[job_id]["status"] = "processing"
     results = []
 
+    # Read the file data here
+    files_data = []
+    for file in files:
+        content = await file.read()
+        files_data.append({
+            "filename": file.filename,
+            "content": content
+        })
+    
+    logger.info("All files read.")
     # Get embedder and weaviate client
     embedder_client = get_embedder_client()
     weaviate_client = get_weaviate_client()
     
+    # Can we also remove the loop from this?
     for file_data in files_data:
         filename = file_data["filename"]
         content = file_data["content"]
@@ -51,17 +80,17 @@ async def process_files_task(job_id: str, files_data: List[dict]):
             chunks = create_chunks(extraction, filename)
             
             # Store chunks locally
-            output_path = Path(settings.processed_docs_dir) / job_id / f"{Path(filename).stem}.json"
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Storing raw data @ {output_path}...")
+            # output_path = Path(settings.processed_docs_dir) / job_id / f"{Path(filename).stem}.json"
+            # output_path.parent.mkdir(parents=True, exist_ok=True)
+            # logger.info(f"Storing raw data @ {output_path}...")
             
-            with open(output_path, 'w') as f:
-                json.dump({
-                    "filename": filename,
-                    "extraction": extraction,
-                    "chunks": chunks,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }, f, indent=2)
+            # with open(output_path, 'w') as f:
+            #     json.dump({
+            #         "filename": filename,
+            #         "extraction": extraction,
+            #         "chunks": chunks,
+            #         "timestamp": datetime.now(timezone.utc).isoformat()
+            #     }, f, indent=2)
             
             # Call the embedding service to generate the embeddings for each chunks
             logger.info(f"Generating embeddings for {filename}...")
@@ -137,16 +166,6 @@ async def ingest(files: List[UploadFile], background_tasks: BackgroundTasks):
     # generate file ingestion job id
     job_id = str(uuid.uuid4())
 
-    # Read file contents
-    logger.info("Reading documents...")
-    files_data = []
-    for file in files:
-        content = await file.read()
-        files_data.append({
-            "filename": file.filename,
-            "content": content
-        })
-
     # Initialize job
     jobs[job_id] = {
         "job_id": job_id,
@@ -158,8 +177,9 @@ async def ingest(files: List[UploadFile], background_tasks: BackgroundTasks):
     }
 
     # Queue background task
+    # NOTE: Commented now for testing
     logger.info(f"Creating JOB: {job_id}")
-    background_tasks.add_task(process_files_task, job_id, files_data)
+    background_tasks.add_task(run_in_threadpool, process_files_task_sync, job_id, files)
     logger.info("Job created.")
 
     return {
@@ -172,6 +192,7 @@ async def ingest(files: List[UploadFile], background_tasks: BackgroundTasks):
 @router.get("/ingest/status/{job_id}")
 async def get_job_status(job_id: str):
     """Get the status of an ingestion job."""
+    # NOTE: This endpoint is blocked by the execution of /ingest endpoint
     if job_id not in jobs:
         raise HTTPException(404, "Job not found")
     
