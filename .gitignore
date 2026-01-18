@@ -15,3 +15,5 @@ wheels/
 .env.local
 
 .vscode/
+
+.coverage
