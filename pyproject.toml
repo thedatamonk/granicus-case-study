@@ -13,10 +13,13 @@ members = [
     "src/apis/docparser",
     "src/apis/embedder",
     "src/apis/chatbot",
+    "src/commons",
 ]
 
 [dependency-groups]
 dev = [
+    "deepeval>=3.7.9",
+    "locust>=2.43.1",
     "pytest>=9.0.2",
     "ruff>=0.14.10",
 ]
