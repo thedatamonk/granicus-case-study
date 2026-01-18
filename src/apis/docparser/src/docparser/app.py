@@ -9,10 +9,11 @@ from fastapi import FastAPI
 from loguru import logger
 from pydantic_settings import BaseSettings
 from starlette.middleware.cors import CORSMiddleware
-
+from commons.middleware import add_prometheus_to_app, initialise_metrics
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await initialise_metrics(app, settings.project_name)
     logger.info("Initialising weaviate client...")
     get_weaviate_client()
     logger.info("Weaviate client initialized.")
@@ -41,6 +42,9 @@ def create_app(settings: BaseSettings) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Add prometheus middleware /metrics endpoint to FastAPI app
+    add_prometheus_to_app(app)
 
     app.include_router(v1_router, prefix=settings.api_prefix)
     logger.info("Application initialisation completed...")
